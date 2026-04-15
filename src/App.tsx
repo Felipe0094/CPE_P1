@@ -2,27 +2,32 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildUnitSummaries, normalizeForComparison } from './lib/aggregation'
 import { fetchEfetivoRowsFromSheets, fetchEfetivoRowsFromTsvUrl, getPlanilhaTsvUrl } from './lib/sheets'
 import type { EfetivoRow } from './lib/types'
+import brasaoCpe from '../Brasoes/cpe.jpg'
+import brasaoBpve from '../Brasoes/bpve.jpg'
+import brasaoBep from '../Brasoes/bepe.jpg'
+import brasaoBptur from '../Brasoes/bptur.jpg'
+import brasaoGpfer from '../Brasoes/gpfer.jpg'
+import brasaoRpmont from '../Brasoes/rpmont.jpg'
+import brasao1Cipm from '../Brasoes/1cipm.jpg'
+import brasaoRecom from '../Brasoes/recom.jpg'
 
 const formatNumberPt = (value: number) => value.toLocaleString('pt-BR')
 const formatCount2 = (value: number) => String(value).padStart(2, '0')
 
 const UNIDADES = ['CPE', 'BPVE', 'BEP', 'BPTUR', 'GPFER', 'RPMONT', '1ª CIPM', 'RECOM'] as const
 
-const BRASOES_RELATIVE: Record<string, string> = {
-  CPE: '../Brasoes/cpe.jpg',
-  BPVE: '../Brasoes/bpve.jpg',
-  BEP: '../Brasoes/bepe.jpg',
-  BPTUR: '../Brasoes/bptur.jpg',
-  GPFER: '../Brasoes/gpfer.jpg',
-  RPMONT: '../Brasoes/rpmont.jpg',
-  '1ª CIPM': '../Brasoes/1cipm.jpg',
-  RECOM: '../Brasoes/recom.jpg',
+const BRASOES_URL: Record<string, string> = {
+  CPE: brasaoCpe,
+  BPVE: brasaoBpve,
+  BEP: brasaoBep,
+  BPTUR: brasaoBptur,
+  GPFER: brasaoGpfer,
+  RPMONT: brasaoRpmont,
+  '1ª CIPM': brasao1Cipm,
+  RECOM: brasaoRecom,
 }
 
-const getBrasaoUrl = (opm: string) => {
-  const rel = BRASOES_RELATIVE[opm]
-  return rel ? new URL(rel, import.meta.url).href : null
-}
+const getBrasaoUrl = (opm: string) => BRASOES_URL[opm] ?? null
 
 type UnitCardProps = {
   opm: string
@@ -161,6 +166,11 @@ export default function App() {
     setError(null)
     try {
       const tsvUrl = getPlanilhaTsvUrl()
+      if (!cfg.enabled && !tsvUrl) {
+        setRows([])
+        setError('Sem fonte de dados: configure VITE_SHEETS_API_KEY nos Secrets do GitHub ou adicione um TSV em /planilha.')
+        return
+      }
       const nextRows = cfg.enabled
         ? await (async () => {
             const [mainRows, cpeRows] = await Promise.all([

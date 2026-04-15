@@ -53,7 +53,11 @@ const findHeaderRowIndex = (values: string[][]) => {
 
 type TsvUrlGlob = Record<string, string>
 
-const PLANILHA_TSV_GLOB = import.meta.glob('../../planilha/*.tsv', { as: 'url', eager: true }) as TsvUrlGlob
+const PLANILHA_TSV_GLOB = import.meta.glob('../../planilha/*.tsv', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+}) as TsvUrlGlob
 
 export const getPlanilhaTsvUrl = (): string | null => {
   const entries = Object.entries(PLANILHA_TSV_GLOB)
