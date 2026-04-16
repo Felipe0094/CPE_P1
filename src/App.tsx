@@ -14,12 +14,12 @@ import brasaoRecom from '../Brasoes/recom.jpg'
 const formatNumberPt = (value: number) => value.toLocaleString('pt-BR')
 const formatCount2 = (value: number) => String(value).padStart(2, '0')
 
-const UNIDADES = ['CPE', 'BPVE', 'BEP', 'BPTUR', 'GPFER', 'RPMONT', '1ª CIPM', 'RECOM'] as const
+const UNIDADES = ['CPE', 'BPVE', 'BEPE', 'BPTUR', 'GPFER', 'RPMONT', '1ª CIPM', 'RECOM'] as const
 
 const BRASOES_URL: Record<string, string> = {
   CPE: brasaoCpe,
   BPVE: brasaoBpve,
-  BEP: brasaoBep,
+  BEPE: brasaoBep,
   BPTUR: brasaoBptur,
   GPFER: brasaoGpfer,
   RPMONT: brasaoRpmont,
@@ -104,7 +104,8 @@ const isOpm = (rowOpm: string, expected: string) => normalizeForComparison(rowOp
 const matchesUnit = (rowOpm: string, unit: string) => {
   const v = normalizeForComparison(rowOpm)
   const u = normalizeForComparison(unit)
-  if (u === normalizeForComparison('BEP')) return v === normalizeForComparison('BEP') || v === normalizeForComparison('BEPE')
+  if (u === normalizeForComparison('BEP') || u === normalizeForComparison('BEPE'))
+    return v === normalizeForComparison('BEP') || v === normalizeForComparison('BEPE')
   if (u === normalizeForComparison('1ª CIPM')) return v === normalizeForComparison('1ª CIPM') || v === normalizeForComparison('1ªCIPM')
   return v === u
 }
