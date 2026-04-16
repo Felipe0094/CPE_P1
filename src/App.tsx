@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { buildUnitSummaries, normalizeForComparison } from './lib/aggregation'
+import { buildUnitSummaries, isOficial, isPraca, normalizeForComparison } from './lib/aggregation'
 import { fetchEfetivoRowsFromSheets, fetchEfetivoRowsFromTsvUrl, getPlanilhaTsvUrl } from './lib/sheets'
 import type { EfetivoRow } from './lib/types'
 import brasaoCpe from '../Brasoes/cpe.jpg'
@@ -159,6 +159,12 @@ export default function App() {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
 
   const unitSummaries = useMemo(() => buildUnitSummaries(rows, [...UNIDADES]), [rows])
+  const totalsGeral = useMemo(() => {
+    const total = rows.length
+    const oficiais = rows.filter(isOficial).length
+    const pracas = rows.filter(isPraca).length
+    return { total, oficiais, pracas }
+  }, [rows])
 
   const loadData = useCallback(async () => {
     const cfg = getSheetsConfigFromEnv()
@@ -221,6 +227,13 @@ export default function App() {
             <h1 className="text-2xl font-semibold tracking-tight text-white">CPE - P1 - Demonstrativo do Efetivo</h1>
             <div className="mt-1 text-sm text-slate-300">
               Fonte: <span className="font-medium text-slate-100">{sourceLabel}</span>
+            </div>
+            <div className="mt-1 text-sm font-semibold text-red-400">
+              Efetivo Total: <span className="text-red-300">{formatNumberPt(totalsGeral.total)}</span>
+              <span className="mx-3 text-red-500">|</span>
+              Oficiais <span className="text-red-300">{formatCount2(totalsGeral.oficiais)}</span>
+              <span className="mx-3 text-red-500">|</span>
+              Praças <span className="text-red-300">{formatCount2(totalsGeral.pracas)}</span>
             </div>
           </div>
         </header>
