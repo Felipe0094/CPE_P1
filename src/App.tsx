@@ -18,6 +18,7 @@ import brasaoRecom from '../Brasoes/recom.jpg'
 
 const formatNumberPt = (value: number) => value.toLocaleString('pt-BR')
 const formatCount2 = (value: number) => String(value).padStart(2, '0')
+const formatCount3 = (value: number) => String(value).padStart(3, '0')
 
 const UNIDADES = ['CPE', 'BPVE', 'BEPE', 'BPTUR', 'GPFER', 'RPMONT', '1ª CIPM', 'RECOM'] as const
 
@@ -146,6 +147,47 @@ const toTopNChartData = (rows: EfetivoRow[], getValue: (r: EfetivoRow) => string
 
 const formatPercent = (value: number) => `${value.toFixed(1).replace('.', ',')}%`
 
+const parseBirthDate = (raw: string): Date | null => {
+  const v = (raw ?? '').toString().trim()
+  if (!v) return null
+
+  const m1 = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (m1) {
+    const dd = Number(m1[1])
+    const mm = Number(m1[2])
+    const yyyy = Number(m1[3])
+    const d = new Date(yyyy, mm - 1, dd)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+
+  const m2 = v.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m2) {
+    const yyyy = Number(m2[1])
+    const mm = Number(m2[2])
+    const dd = Number(m2[3])
+    const d = new Date(yyyy, mm - 1, dd)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+
+  return null
+}
+
+const monthLabelPt = (monthIndex0: number) =>
+  [
+    'janeiro',
+    'fevereiro',
+    'março',
+    'abril',
+    'maio',
+    'junho',
+    'julho',
+    'agosto',
+    'setembro',
+    'outubro',
+    'novembro',
+    'dezembro',
+  ][monthIndex0] ?? ''
+
 const BreakdownBlock = ({ data, total }: { data: ChartDatum[]; total: number }) => {
   if (data.length === 0) return <div className="text-sm text-slate-500">Sem dados.</div>
 
@@ -177,6 +219,7 @@ export default function App() {
   const [cpeAdmLoading, setCpeAdmLoading] = useState(false)
   const [cpeAdmError, setCpeAdmError] = useState<string | null>(null)
   const [cpeAdmRows, setCpeAdmRows] = useState<EfetivoAdministrativoRow[]>([])
+  const [page, setPage] = useState<'P1' | 'P5'>('P1')
 
   const unitSummaries = useMemo(() => buildUnitSummaries(rows, [...UNIDADES]), [rows])
   const totalsGeral = useMemo(() => {
@@ -280,23 +323,97 @@ export default function App() {
     return sections
   }, [cpeAdmRows])
 
+  const birthdaysByMonth = useMemo(() => {
+    const monthBuckets = Array.from({ length: 12 }).map((_, month) => {
+      const items = cpeAdmRows
+        .map((r) => {
+          const d = parseBirthDate(r.dataNasc)
+          return { row: r, date: d }
+        })
+        .filter((x) => x.date != null && x.date.getMonth() === month)
+        .map((x) => ({ row: x.row, date: x.date! }))
+        .sort((a, b) => a.date.getDate() - b.date.getDate() || a.row.nome.localeCompare(b.row.nome, 'pt-BR'))
+
+      const byDay = new Map<number, EfetivoAdministrativoRow[]>()
+      for (const it of items) {
+        const day = it.date.getDate()
+        if (!byDay.has(day)) byDay.set(day, [])
+        byDay.get(day)!.push(it.row)
+      }
+
+      const days = Array.from(byDay.entries())
+        .map(([day, list]) => ({ day, list }))
+        .sort((a, b) => a.day - b.day)
+
+      return { month, count: items.length, days }
+    })
+
+    return monthBuckets
+  }, [cpeAdmRows])
+
   return (
-    <div className="min-h-screen bg-black">
+    <div
+      className={
+        page === 'P5'
+          ? 'relative min-h-screen overflow-hidden bg-gradient-to-br from-sky-400 via-blue-600 to-indigo-700'
+          : 'min-h-screen bg-black'
+      }
+    >
+      {page === 'P5' ? (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 -left-24 h-80 w-80 rounded-full bg-white/25 blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-fuchsia-300/20 blur-3xl" />
+          <div className="absolute left-1/3 top-12 h-64 w-64 rounded-full bg-amber-200/15 blur-3xl" />
+          <div className="absolute inset-0 opacity-40 [background-size:18px_18px] [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.25)_1px,transparent_0)]" />
+        </div>
+      ) : null}
       <div className="mx-auto max-w-6xl px-4 py-8">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">CPE - P1 - Demonstrativo do Efetivo</h1>
-            <div className="mt-1 text-sm text-slate-300">
-              Fonte: <span className="font-medium text-slate-100">{sourceLabel}</span>
-            </div>
-            <div className="mt-1 text-sm font-semibold text-red-400">
-              Efetivo Total: <span className="text-red-300">{formatNumberPt(totalsGeral.total)}</span>
-              <span className="mx-3 text-red-500">|</span>
-              Oficiais <span className="text-red-300">{formatCount2(totalsGeral.oficiais)}</span>
-              <span className="mx-3 text-red-500">|</span>
-              Praças <span className="text-red-300">{formatCount2(totalsGeral.pracas)}</span>
-            </div>
+        <header className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage('P1')}
+              className={[
+                'rounded-lg px-3 py-2 text-sm font-semibold transition',
+                page === 'P1' ? 'bg-white text-slate-900' : 'border border-slate-700 bg-black text-slate-200 hover:bg-slate-900',
+              ].join(' ')}
+            >
+              P1 — Efetivo
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setPage('P5')
+                if (cpeAdmRows.length === 0 && !cpeAdmLoading) await loadCpeAdm()
+              }}
+              className={[
+                'rounded-lg px-3 py-2 text-sm font-semibold transition',
+                page === 'P5' ? 'bg-white text-slate-900' : 'border border-slate-700 bg-black text-slate-200 hover:bg-slate-900',
+              ].join(' ')}
+            >
+              P5 — Comunicação Social
+            </button>
           </div>
+
+          {page === 'P1' ? (
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-white">CPE - P1 - Demonstrativo do Efetivo</h1>
+              <div className="mt-1 text-sm text-slate-300">
+                Fonte: <span className="font-medium text-slate-100">{sourceLabel}</span>
+              </div>
+              <div className="mt-1 text-sm font-semibold text-red-400">
+                Efetivo Total: <span className="text-red-300">{formatNumberPt(totalsGeral.total)}</span>
+                <span className="mx-3 text-red-500">|</span>
+                Oficiais <span className="text-red-300">{formatCount2(totalsGeral.oficiais)}</span>
+                <span className="mx-3 text-red-500">|</span>
+                Praças <span className="text-red-300">{formatCount2(totalsGeral.pracas)}</span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-white">CPE - P5 - Comunicação Social</h1>
+            </div>
+          )}
         </header>
 
         {error ? (
@@ -304,7 +421,83 @@ export default function App() {
         ) : null}
 
         <main className="mt-6 space-y-6">
-          <section className="space-y-3">
+          {page === 'P5' ? (
+            <section className="space-y-3">
+              <div className="rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-lg font-semibold text-white">Aniversariantes por mês (CPE)</div>
+                    <div className="mt-1 text-sm text-white/80">
+                      Total de registros: <span className="font-semibold text-white">{formatNumberPt(cpeAdmRows.length)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await loadCpeAdm()
+                      }}
+                      className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+                    >
+                      Atualizar
+                    </button>
+                  </div>
+                </div>
+
+                {cpeAdmLoading ? <div className="mt-3 text-sm text-white/80">Carregando...</div> : null}
+                {cpeAdmError ? (
+                  <div className="mt-3 rounded-xl border border-red-200/40 bg-red-950/40 p-3 text-sm text-red-100">
+                    {cpeAdmError}
+                  </div>
+                ) : null}
+
+                {!cpeAdmLoading && !cpeAdmError ? (
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {birthdaysByMonth.map(({ month, count, days }) => (
+                      <div key={month} className="overflow-hidden rounded-2xl border border-white/20 bg-white/10 backdrop-blur">
+                        <div className="flex items-center justify-between border-b border-white/15 bg-white/5 px-3 py-2">
+                          <div className="text-sm font-semibold text-white">{monthLabelPt(month)}</div>
+                          <div className="text-sm font-semibold text-white">{formatCount3(count)}</div>
+                        </div>
+                        {count === 0 ? (
+                          <div className="px-3 py-3 text-sm text-white/75">Sem aniversariantes.</div>
+                        ) : (
+                          <div className="max-h-72 overflow-auto">
+                            <div className="space-y-2 px-3 py-3">
+                              {days.map(({ day, list }) => (
+                                <div key={day} className="rounded-xl bg-white/5">
+                                  <div className="flex items-center justify-between px-3 py-2">
+                                    <div className="text-sm font-semibold text-white">Dia {formatCount2(day)}</div>
+                                    <div className="text-sm font-semibold text-white/90">{formatCount2(list.length)}</div>
+                                  </div>
+                                  <div className="divide-y divide-white/10">
+                                    {list.map((r, idx) => (
+                                      <div key={`${month}-${day}-${idx}-${r.nome}`} className="px-3 py-2">
+                                        <div className="min-w-0 truncate text-sm font-semibold text-white">{r.nome}</div>
+                                        <div className="mt-0.5 text-sm text-white/80">
+                                          {r.grauHierarquico || '—'}
+                                          <span className="mx-2 text-white/50">|</span>
+                                          {r.secao || '—'}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          {page === 'P1' ? (
+            <section className="space-y-3">
             <div className="space-y-3">
               {unitSummaries.map((u) => {
                 const active = selectedUnit === u.opm
@@ -434,6 +627,7 @@ export default function App() {
               })}
             </div>
           </section>
+          ) : null}
         </main>
       </div>
     </div>

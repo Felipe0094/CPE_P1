@@ -157,6 +157,7 @@ const parseEfetivoAdministrativoRowsFromTable = (values: string[][]): EfetivoAdm
   const idxNome = pickIndex(headers, ['NOME'])
   const idxGrau = pickIndex(headers, ['GH', 'GRAU HIERARQUICO', 'GRAU HIERÁRQUICO'])
   const idxUnidade = pickIndex(headers, ['UNIDADE', 'OPM'])
+  const idxDataNasc = pickIndex(headers, ['DATA NASC', 'DATA NASC.', 'DATA DE NASCIMENTO', 'NASCIMENTO'])
   const idxSecao = pickIndex(headers, ['SECAO', 'SEÇÃO', 'SETOR/SECAO', 'SETOR/SEÇÃO', 'SETOR', 'SECAO', 'SEÇÃO'])
 
   const get = (row: string[], idx: number) => (idx < 0 ? '' : (row[idx] ?? '').toString())
@@ -169,6 +170,7 @@ const parseEfetivoAdministrativoRowsFromTable = (values: string[][]): EfetivoAdm
         nome: get(row, idxNome).trim(),
         grauHierarquico: get(row, idxGrau).trim(),
         unidade: get(row, idxUnidade).trim(),
+        dataNasc: get(row, idxDataNasc).trim(),
         secao: get(row, idxSecao).trim(),
       }
     })

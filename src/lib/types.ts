@@ -14,6 +14,7 @@ export type EfetivoAdministrativoRow = {
   nome: string
   grauHierarquico: string
   unidade: string
+  dataNasc: string
   secao: string
 }
 
