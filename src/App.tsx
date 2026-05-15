@@ -22,6 +22,54 @@ const formatCount3 = (value: number) => String(value).padStart(3, '0')
 
 const UNIDADES = ['CPE', 'BPVE', 'BEPE', 'BPTUR', 'GPFER', 'RPMONT', '1ª CIPM', 'RECOM'] as const
 
+
+type SheetsOverride = {
+  spreadsheetId?: string
+  rangeA1?: string
+}
+
+const SHEETS_OVERRIDES_STORAGE = {
+  main: 'cpe:sheets:main',
+  cpe: 'cpe:sheets:cpe',
+  cpeAdm: 'cpe:sheets:cpeAdm',
+} as const
+
+const readSheetsOverride = (key: keyof typeof SHEETS_OVERRIDES_STORAGE): SheetsOverride | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(SHEETS_OVERRIDES_STORAGE[key])
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as unknown
+    if (typeof parsed !== 'object' || parsed == null) return null
+    const obj = parsed as Record<string, unknown>
+    const spreadsheetId = typeof obj.spreadsheetId === 'string' ? obj.spreadsheetId : undefined
+    const rangeA1 = typeof obj.rangeA1 === 'string' ? obj.rangeA1 : undefined
+    if (!spreadsheetId && !rangeA1) return null
+    return { spreadsheetId, rangeA1 }
+  } catch {
+    return null
+  }
+}
+
+const writeSheetsOverride = (key: keyof typeof SHEETS_OVERRIDES_STORAGE, value: SheetsOverride | null) => {
+  if (typeof window === 'undefined') return
+  const storageKey = SHEETS_OVERRIDES_STORAGE[key]
+  if (value == null) {
+    window.localStorage.removeItem(storageKey)
+    return
+  }
+  window.localStorage.setItem(storageKey, JSON.stringify(value))
+}
+
+const parseSpreadsheetIdFromInput = (input: string) => {
+  const raw = (input ?? '').toString().trim()
+  if (!raw) return ''
+  const m1 = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+  if (m1?.[1]) return m1[1]
+  const m2 = raw.match(/[?&]id=([a-zA-Z0-9-_]+)/)
+  if (m2?.[1]) return m2[1]
+  return raw
+}
 const BRASOES_URL: Record<string, string> = {
   CPE: brasaoCpe,
   BPVE: brasaoBpve,
@@ -88,29 +136,38 @@ const UnitCard = ({ opm, total, oficiais, pracas, active, onClick }: UnitCardPro
 }
 
 const getSheetsConfigFromEnv = () => {
+  const override = readSheetsOverride('main')
   const apiKey = (import.meta.env.VITE_SHEETS_API_KEY as string | undefined) ?? ''
   const spreadsheetId =
-    (import.meta.env.VITE_SHEETS_SPREADSHEET_ID as string | undefined) ?? '1ZHnZoGma_pEVrgOiXPMQDBztkNro_Rxcvzbf1auBssk'
-  const rangeA1 = (import.meta.env.VITE_SHEETS_RANGE as string | undefined) ?? "'EFETIVO TOTAL'!A1:AA"
+    override?.spreadsheetId ??
+    (import.meta.env.VITE_SHEETS_SPREADSHEET_ID as string | undefined) ??
+    '1ZHnZoGma_pEVrgOiXPMQDBztkNro_Rxcvzbf1auBssk'
+  const rangeA1 =
+    override?.rangeA1 ?? (import.meta.env.VITE_SHEETS_RANGE as string | undefined) ?? "'EFETIVO TOTAL'!A1:AA"
   const enabled = apiKey.trim() !== '' && spreadsheetId.trim() !== ''
   return { enabled, apiKey, spreadsheetId, rangeA1 }
 }
 
 const getCpeSheetsConfigFromEnv = () => {
+  const override = readSheetsOverride('cpe')
   const apiKey = (import.meta.env.VITE_SHEETS_API_KEY as string | undefined) ?? ''
   const spreadsheetId =
-    (import.meta.env.VITE_SHEETS_CPE_SPREADSHEET_ID as string | undefined) ?? '1PzMkqcMqR_I9RKAGRG53U1gGXy1p2eg3CLDTiGpiqIA'
-  const rangeA1 = (import.meta.env.VITE_SHEETS_CPE_RANGE as string | undefined) ?? "'CPE'!A1:AA"
+    override?.spreadsheetId ??
+    (import.meta.env.VITE_SHEETS_CPE_SPREADSHEET_ID as string | undefined) ??
+    '1PzMkqcMqR_I9RKAGRG53U1gGXy1p2eg3CLDTiGpiqIA'
+  const rangeA1 = override?.rangeA1 ?? (import.meta.env.VITE_SHEETS_CPE_RANGE as string | undefined) ?? "'CPE'!A1:AA"
   const enabled = apiKey.trim() !== '' && spreadsheetId.trim() !== ''
   return { enabled, apiKey, spreadsheetId, rangeA1 }
 }
 
 const getCpeAdminSheetsConfigFromEnv = () => {
+  const override = readSheetsOverride('cpeAdm')
   const apiKey = (import.meta.env.VITE_SHEETS_API_KEY as string | undefined) ?? ''
   const spreadsheetId =
+    override?.spreadsheetId ??
     (import.meta.env.VITE_SHEETS_CPE_ADMIN_SPREADSHEET_ID as string | undefined) ??
     '11LftHQvVWdjT7QCYBVBxloo0v668igPADuXNZsRtCBA'
-  const rangeA1 = (import.meta.env.VITE_SHEETS_CPE_ADMIN_RANGE as string | undefined) ?? 'A1:F'
+  const rangeA1 = override?.rangeA1 ?? (import.meta.env.VITE_SHEETS_CPE_ADMIN_RANGE as string | undefined) ?? 'A1:F'
   const enabled = apiKey.trim() !== '' && spreadsheetId.trim() !== ''
   return { enabled, apiKey, spreadsheetId, rangeA1 }
 }
@@ -220,6 +277,16 @@ export default function App() {
   const [cpeAdmError, setCpeAdmError] = useState<string | null>(null)
   const [cpeAdmRows, setCpeAdmRows] = useState<EfetivoAdministrativoRow[]>([])
   const [page, setPage] = useState<'P1' | 'P5'>('P1')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsAuthed, setSettingsAuthed] = useState(false)
+  const [settingsPassword, setSettingsPassword] = useState('')
+  const [settingsAuthError, setSettingsAuthError] = useState<string | null>(null)
+  const [mainSheetInput, setMainSheetInput] = useState('')
+  const [mainRangeInput, setMainRangeInput] = useState('')
+  const [cpeSheetInput, setCpeSheetInput] = useState('')
+  const [cpeRangeInput, setCpeRangeInput] = useState('')
+  const [cpeAdmSheetInput, setCpeAdmSheetInput] = useState('')
+  const [cpeAdmRangeInput, setCpeAdmRangeInput] = useState('')
 
   const unitSummaries = useMemo(() => buildUnitSummaries(rows, [...UNIDADES]), [rows])
   const totalsGeral = useMemo(() => {
@@ -351,6 +418,21 @@ export default function App() {
     return monthBuckets
   }, [cpeAdmRows])
 
+  const openSettings = () => {
+    const mainCfg = getSheetsConfigFromEnv()
+    const cpeCfg = getCpeSheetsConfigFromEnv()
+    const cpeAdmCfg = getCpeAdminSheetsConfigFromEnv()
+    setMainSheetInput(mainCfg.spreadsheetId)
+    setMainRangeInput(mainCfg.rangeA1)
+    setCpeSheetInput(cpeCfg.spreadsheetId)
+    setCpeRangeInput(cpeCfg.rangeA1)
+    setCpeAdmSheetInput(cpeAdmCfg.spreadsheetId)
+    setCpeAdmRangeInput(cpeAdmCfg.rangeA1)
+    setSettingsPassword('')
+    setSettingsAuthError(null)
+    setSettingsOpen(true)
+  }
+
   return (
     <div
       className={
@@ -368,6 +450,180 @@ export default function App() {
         </div>
       ) : null}
       <div className="mx-auto max-w-6xl px-4 py-8">
+        {settingsOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <div className="text-base font-semibold text-slate-900">Configuração da planilha</div>
+                <div className="mt-1 text-sm text-slate-600">As alterações ficam salvas neste navegador.</div>
+              </div>
+
+              {!settingsAuthed ? (
+                <div className="space-y-4 px-4 py-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700">Senha</label>
+                    <input
+                      type="password"
+                      value={settingsPassword}
+                      onChange={(e) => setSettingsPassword(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                      autoFocus
+                    />
+                    {settingsAuthError ? <div className="mt-2 text-sm text-red-700">{settingsAuthError}</div> : null}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsOpen(false)
+                        setSettingsPassword('')
+                        setSettingsAuthError(null)
+                      }}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (settingsPassword !== 'cpe123') {
+                          setSettingsAuthError('Senha incorreta.')
+                          return
+                        }
+                        setSettingsAuthed(true)
+                        setSettingsAuthError(null)
+                        setSettingsPassword('')
+                      }}
+                      className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                    >
+                      Entrar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 px-4 py-4">
+                  <div className="rounded-xl border border-slate-200 p-3">
+                    <div className="text-sm font-semibold text-slate-800">Efetivo total</div>
+                    <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="text-sm font-semibold text-slate-700">Link ou ID da planilha</label>
+                        <input
+                          value={mainSheetInput}
+                          onChange={(e) => setMainSheetInput(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-slate-700">Range (A1)</label>
+                        <input
+                          value={mainRangeInput}
+                          onChange={(e) => setMainRangeInput(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 p-3">
+                    <div className="text-sm font-semibold text-slate-800">CPE</div>
+                    <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="text-sm font-semibold text-slate-700">Link ou ID da planilha</label>
+                        <input
+                          value={cpeSheetInput}
+                          onChange={(e) => setCpeSheetInput(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-slate-700">Range (A1)</label>
+                        <input
+                          value={cpeRangeInput}
+                          onChange={(e) => setCpeRangeInput(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 p-3">
+                    <div className="text-sm font-semibold text-slate-800">Administrativo (CPE)</div>
+                    <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="text-sm font-semibold text-slate-700">Link ou ID da planilha</label>
+                        <input
+                          value={cpeAdmSheetInput}
+                          onChange={(e) => setCpeAdmSheetInput(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-slate-700">Range (A1)</label>
+                        <input
+                          value={cpeAdmRangeInput}
+                          onChange={(e) => setCpeAdmRangeInput(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        writeSheetsOverride('main', null)
+                        writeSheetsOverride('cpe', null)
+                        writeSheetsOverride('cpeAdm', null)
+                        setSettingsOpen(false)
+                        void loadData()
+                        if (page === 'P5') void loadCpeAdm()
+                      }}
+                      className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                    >
+                      Limpar configurações
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSettingsOpen(false)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const toOverride = (sheetInput: string, rangeInput: string): SheetsOverride | null => {
+                            const spreadsheetId = parseSpreadsheetIdFromInput(sheetInput).trim()
+                            const rangeA1 = (rangeInput ?? '').toString().trim()
+                            const next: SheetsOverride = {}
+                            if (spreadsheetId !== '') next.spreadsheetId = spreadsheetId
+                            if (rangeA1 !== '') next.rangeA1 = rangeA1
+                            return Object.keys(next).length > 0 ? next : null
+                          }
+
+                          writeSheetsOverride('main', toOverride(mainSheetInput, mainRangeInput))
+                          writeSheetsOverride('cpe', toOverride(cpeSheetInput, cpeRangeInput))
+                          writeSheetsOverride('cpeAdm', toOverride(cpeAdmSheetInput, cpeAdmRangeInput))
+                          setSettingsOpen(false)
+                          await loadData()
+                          if (page === 'P5') await loadCpeAdm()
+                        }}
+                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                      >
+                        Salvar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         <header className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -392,6 +648,21 @@ export default function App() {
               ].join(' ')}
             >
               P5 — Comunicação Social
+            </button>
+
+            <button
+              type="button"
+              onClick={openSettings}
+              className="ml-auto inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-black px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-900"
+              title="Configurações"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+                <path
+                  fill="currentColor"
+                  d="M19.14,12.94a7.43,7.43,0,0,0,.05-.94,7.43,7.43,0,0,0-.05-.94l2.11-1.65a.5.5,0,0,0,.12-.63l-2-3.46a.5.5,0,0,0-.6-.22l-2.49,1a7.28,7.28,0,0,0-1.63-.94l-.38-2.65A.5.5,0,0,0,13.78,2H10.22a.5.5,0,0,0-.49.42L9.35,5.07a7.28,7.28,0,0,0-1.63.94l-2.49-1a.5.5,0,0,0-.6.22l-2,3.46a.5.5,0,0,0,.12.63L4.86,11.06a7.43,7.43,0,0,0-.05.94,7.43,7.43,0,0,0,.05.94L2.75,14.59a.5.5,0,0,0-.12.63l2,3.46a.5.5,0,0,0,.6.22l2.49-1a7.28,7.28,0,0,0,1.63.94l.38,2.65a.5.5,0,0,0,.49.42h3.56a.5.5,0,0,0,.49-.42l.38-2.65a7.28,7.28,0,0,0,1.63-.94l2.49,1a.5.5,0,0,0,.6-.22l2-3.46a.5.5,0,0,0-.12-.63ZM12,15.5A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z"
+                />
+              </svg>
+              Configurar
             </button>
           </div>
 
