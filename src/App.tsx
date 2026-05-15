@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildUnitSummaries, isOficial, isPraca, normalizeForComparison } from './lib/aggregation'
+import { demoRows } from './lib/demoData'
 import {
   fetchEfetivoAdministrativoRowsFromSheets,
   fetchEfetivoRowsFromSheets,
   fetchEfetivoRowsFromTsvUrl,
   getPlanilhaTsvUrl,
 } from './lib/sheets'
+import { sheetsConfig } from './sheetsConfig'
 import type { EfetivoAdministrativoRow, EfetivoRow } from './lib/types'
 import brasaoCpe from '../Brasoes/cpe.jpg'
 import brasaoBpve from '../Brasoes/bpve.jpg'
@@ -141,9 +143,9 @@ const getSheetsConfigFromEnv = () => {
   const spreadsheetId =
     override?.spreadsheetId ??
     (import.meta.env.VITE_SHEETS_SPREADSHEET_ID as string | undefined) ??
-    '1ZHnZoGma_pEVrgOiXPMQDBztkNro_Rxcvzbf1auBssk'
+    sheetsConfig.main.spreadsheetId
   const rangeA1 =
-    override?.rangeA1 ?? (import.meta.env.VITE_SHEETS_RANGE as string | undefined) ?? "'EFETIVO TOTAL'!A1:AA"
+    override?.rangeA1 ?? (import.meta.env.VITE_SHEETS_RANGE as string | undefined) ?? sheetsConfig.main.rangeA1
   const enabled = apiKey.trim() !== '' && spreadsheetId.trim() !== ''
   return { enabled, apiKey, spreadsheetId, rangeA1 }
 }
@@ -154,8 +156,8 @@ const getCpeSheetsConfigFromEnv = () => {
   const spreadsheetId =
     override?.spreadsheetId ??
     (import.meta.env.VITE_SHEETS_CPE_SPREADSHEET_ID as string | undefined) ??
-    '1PzMkqcMqR_I9RKAGRG53U1gGXy1p2eg3CLDTiGpiqIA'
-  const rangeA1 = override?.rangeA1 ?? (import.meta.env.VITE_SHEETS_CPE_RANGE as string | undefined) ?? "'CPE'!A1:AA"
+    sheetsConfig.cpe.spreadsheetId
+  const rangeA1 = override?.rangeA1 ?? (import.meta.env.VITE_SHEETS_CPE_RANGE as string | undefined) ?? sheetsConfig.cpe.rangeA1
   const enabled = apiKey.trim() !== '' && spreadsheetId.trim() !== ''
   return { enabled, apiKey, spreadsheetId, rangeA1 }
 }
@@ -166,8 +168,8 @@ const getCpeAdminSheetsConfigFromEnv = () => {
   const spreadsheetId =
     override?.spreadsheetId ??
     (import.meta.env.VITE_SHEETS_CPE_ADMIN_SPREADSHEET_ID as string | undefined) ??
-    '11LftHQvVWdjT7QCYBVBxloo0v668igPADuXNZsRtCBA'
-  const rangeA1 = override?.rangeA1 ?? (import.meta.env.VITE_SHEETS_CPE_ADMIN_RANGE as string | undefined) ?? 'A1:F'
+    sheetsConfig.cpeAdm.spreadsheetId
+  const rangeA1 = override?.rangeA1 ?? (import.meta.env.VITE_SHEETS_CPE_ADMIN_RANGE as string | undefined) ?? sheetsConfig.cpeAdm.rangeA1
   const enabled = apiKey.trim() !== '' && spreadsheetId.trim() !== ''
   return { enabled, apiKey, spreadsheetId, rangeA1 }
 }
@@ -303,8 +305,7 @@ export default function App() {
     try {
       const tsvUrl = getPlanilhaTsvUrl()
       if (!cfg.enabled && !tsvUrl) {
-        setRows([])
-        setError('Sem fonte de dados: configure VITE_SHEETS_API_KEY nos Secrets do GitHub ou adicione um TSV em /planilha.')
+        setRows(demoRows)
         return
       }
       const nextRows = cfg.enabled
