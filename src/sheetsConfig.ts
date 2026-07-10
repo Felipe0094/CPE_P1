@@ -1,10 +1,10 @@
 export const sheetsConfig = {
   main: {
-    spreadsheetId: '1AIBdQ6izu9kAhKGLbOdeXYjuNX_UK97lRhRxIFIt3jk',
+    spreadsheetId: '1jOW-LgVuXoXvB7bbzA_EQoUDE9u0EUQmSQiSNRnZu1I',
     rangeA1: "'EFETIVO TOTAL'!A1:AA",
   },
   cpe: {
-    spreadsheetId: '11sSvBfqbFipEddPkTxloOh7HV_nBLKMAkpJFav5XuF4',
+    spreadsheetId: '1KEK8VEP9DQpVIy9uzsNM7b_4HyVq2Ty_IFLidwC9HVA',
     rangeA1: "'CPE'!A1:AA",
   },
   cpeAdm: {
